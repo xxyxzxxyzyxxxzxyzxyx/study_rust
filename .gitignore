@@ -8,6 +8,7 @@
 *.o
 *.so
 
+
 ############
 # Packages #
 ############
@@ -22,12 +23,14 @@
 *.tar
 *.zip
 
+
 ######################
 # Logs and databases #
 ######################
 *.log
 *.sql
 *.sqlite
+
 
 ######################
 # OS generated files #
@@ -40,6 +43,7 @@
 ehthumbs.db
 Thumbs.db
 
+
 ###################
 # non script data #
 ###################
@@ -50,7 +54,16 @@ Thumbs.db
 *.jpeg
 references/
 
+
 ####################
 # vscode container #
 ####################
 .devcontainer/
+
+
+########
+# rust #
+########
+target/
+Cargo.lock
+Cargo.toml
