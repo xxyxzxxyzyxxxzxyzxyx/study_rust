@@ -1,6 +1,7 @@
 extern crate num;
 extern crate image;
 extern crate crossbeam;
+
 use num::Complex;
 use std::str::FromStr;
 use image::ColorType;
@@ -24,34 +25,31 @@ fn main() {
     let lower_right = parse_complex(&args[4]).expect("error parsing lower right corner point");
     let mut pixels = vec![0; bounds.0 * bounds.1];
 
-    render(&mut pixels, bounds, upper_left, lower_right);
+    let threads = 8;
+    let rows_per_band = bounds.1 / threads + 1;
+
+    {
+        let bands: Vec<&mut [u8]> = pixels.chunks_mut(rows_per_band * bounds.0).collect();
+        crossbeam::scope(|spawner| {
+            for (i, band) in bands.into_iter().enumerate() {
+                let top = rows_per_band * i;
+                let height = band.len() / bounds.0;
+                let band_bounds = (bounds.0, height);
+                let band_upper_left = pixel_to_point(bounds, (0, top), upper_left, lower_right);
+                let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height), upper_left, lower_right);
+                spawner.spawn(move || {
+                    render(band, band_bounds, band_upper_left, band_lower_right);
+                });
+            }
+        });
+    }
 
     write_image(&args[1], &pixels, bounds).expect("error writing PNG file");
 }
 
-fn square_loop(mut x: f64) {
-    loop {
-        x = x * x;
-    }
-}
-
-fn square_add_loop(c: f64) {
-    let mut x = 0.;
-    loop {
-        x = x * x + c;
-    }
-}
-
-fn complex_square_add_loop(c: Complex<f64>) {
+fn escape_time(c: Complex<f64>, limit: u32) -> Option<u32> {
     let mut z = Complex { re: 0.0, im: 0.0 };
-    loop {
-        z = z * z + c;
-    }
-}
-
-fn escape_time(c: Complex<64>, limit: u32) -> Option<u32> {
-    let mut z = Complex { re: 0.0, im: 0.0 };
-    for i in 0..limit {
+    for i in 0 .. limit {
         z = z * z + c;
         if z.norm_sqr() > 4.0 {
             return Some(i);
@@ -81,6 +79,13 @@ fn test_parse_pair() {
     assert_eq!(parse_pair::<i32>("10,20xy", ','), None);
     assert_eq!(parse_pair::<f64>("0.5x",    'x'), None);
     assert_eq!(parse_pair::<f64>("0.5x1.5", 'x'), Some((0.5, 1.5)));
+}
+
+fn parse_complex(s: &str) -> Option<Complex<f64>> {
+    match parse_pair(s, ',') {
+        Some((re, im)) => Some(Complex { re, im }),
+        None => None
+    }
 }
 
 #[test]
@@ -119,7 +124,7 @@ fn render(pixels: &mut [u8],
     assert!(pixels.len() == bounds.0 * bounds.1);
     for row in 0 .. bounds.1 {
         for column in 0 .. bounds.0 {
-            len point = pixel_to_point(bounds, (column, row), upper_left, lower_right);
+            let point = pixel_to_point(bounds, (column, row), upper_left, lower_right);
             pixels[row * bounds.0 + column] = match escape_time(point, 255) {
                 None => 0,
                 Some(count) => 255 - count as u8
@@ -133,8 +138,8 @@ fn write_image(filename: &str,
                bounds: (usize, usize)) 
     -> Result<(), std::io::Error> 
 {
-    len output - File::create(filename)?;
-    let encoder - PNGEncoder::new(output);
+    let output = File::create(filename)?;
+    let encoder = PNGEncoder::new(output);
     encoder.encode(&pixels,
                    bounds.0 as u32,
                    bounds.1 as u32,
